@@ -1,0 +1,48 @@
+import { createBrowserRouter } from "react-router";
+import { LandingPage } from "./pages/LandingPage";
+import { LoginPage } from "./pages/LoginPage";
+import { DashboardJeune } from "./pages/DashboardJeune";
+import { DashboardEntreprise } from "./pages/DashboardEntreprise";
+import { Missions } from "./pages/Missions";
+import { MissionDetail } from "./pages/MissionDetail";
+import { ProfileJeune } from "./pages/ProfileJeune";
+import { ProfileEntreprise } from "./pages/ProfileEntreprise";
+import { MesCandidatures } from "./pages/MesCandidatures";
+import { GererCandidatures } from "./pages/GererCandidatures";
+import { PublierMission } from "./pages/PublierMission";
+import { EntrepriseMissions } from "./pages/EntrepriseMissions";
+import { EntrepriseCandidatures } from "./pages/EntrepriseCandidatures";
+import { AdminDashboard } from "./pages/AdminDashboard";
+import { AdminVerifications } from "./pages/AdminVerifications";
+import { AdminLogin } from "./pages/AdminLogin";
+import { AdminUsers } from "./pages/AdminUsers";
+import { AdminUserDetail } from "./pages/AdminUserDetail";
+import { AdminMissions } from "./pages/AdminMissions";
+import { AdminReports } from "./pages/AdminReports";
+import { AdminLogs } from "./pages/AdminLogs";
+import { AdminManage } from "./pages/AdminManage";
+
+export const router = createBrowserRouter([
+  { path: "/", Component: LandingPage },
+  { path: "/login", Component: LoginPage },
+  { path: "/dashboard-jeune", Component: DashboardJeune },
+  { path: "/dashboard-entreprise", Component: DashboardEntreprise },
+  { path: "/missions", Component: Missions },
+  { path: "/missions/:id", Component: MissionDetail },
+  { path: "/profile-jeune", Component: ProfileJeune },
+  { path: "/profile-entreprise", Component: ProfileEntreprise },
+  { path: "/mes-candidatures", Component: MesCandidatures },
+  { path: "/gerer-candidatures/:missionId", Component: GererCandidatures },
+  { path: "/publier-mission", Component: PublierMission },
+  { path: "/entreprise/missions", Component: EntrepriseMissions },
+  { path: "/entreprise/candidatures", Component: EntrepriseCandidatures },
+  { path: "/admin-login", Component: AdminLogin },
+  { path: "/admin", Component: AdminDashboard },
+  { path: "/admin-verifications", Component: AdminVerifications },
+  { path: "/admin-users", Component: AdminUsers },
+  { path: "/admin-users/:userId", Component: AdminUserDetail },
+  { path: "/admin-missions", Component: AdminMissions },
+  { path: "/admin-reports", Component: AdminReports },
+  { path: "/admin-logs", Component: AdminLogs },
+  { path: "/admin-manage", Component: AdminManage },
+]);

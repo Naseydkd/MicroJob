@@ -1,0 +1,44 @@
+{
+  "users": [
+    {
+      "id": "jeune1",
+      "email": "jeune1@test.com",
+      "user_type": "jeune",
+      "nom": "Ibrahim",
+      "prenom": "Moussa",
+      "telephone": "+227 90 12 34 56",
+      "ville": "Niamey",
+      "created_at": "2025-11-15"
+    },
+    {
+      "id": "jeune2",
+      "email": "jeune2@test.com",
+      "user_type": "jeune",
+      "nom": "Abdou",
+      "prenom": "Aïcha",
+      "telephone": "+227 91 23 45 67",
+      "ville": "Niamey",
+      "created_at": "2025-12-01"
+    }
+  ],
+  "auth_users": [
+    {
+      "user_id": "jeune1",
+      "email": "jeune1@test.com",
+      "password": "password123"
+    }
+  ],
+  "missions": [],
+  "candidatures": [],
+  "notifications": [
+    {
+      "id": "n1",
+      "user_id": "jeune1",
+      "titre": "Information",
+      "message": "Pas de mission disponible pour l'instant.",
+      "type": "mission",
+      "lu": false,
+      "created_at": "2026-02-23T14:30:00"
+    }
+  ]
+}

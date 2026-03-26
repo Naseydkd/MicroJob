@@ -1,0 +1,30 @@
+{
+  "webnative.disableClipboardCommandDetection": true,
+  "cSpell.language": "en,fr",
+  "cSpell.ignorePaths": [
+    "node_modules/**",
+    "dist/**"
+  ],
+  "cSpell.words": [
+    "Microjob",
+    "microjob",
+    "zarma",
+    "haoussa",
+    "Niamey",
+    "FCFA",
+    "prenom",
+    "nigeriens",
+    "nigeriya",
+    "candidatures",
+    "candidature",
+    "opportunites",
+    "confidentialite",
+    "bureautique",
+    "Baccalaureat",
+    "Comptabilite",
+    "Ibrahim",
+    "Moussa",
+    "Abdou",
+    "Aicha"
+  ]
+}
