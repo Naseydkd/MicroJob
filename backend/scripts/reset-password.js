@@ -1,4 +1,4 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 require('dotenv').config({ path: '../.env' });
 
@@ -10,44 +10,37 @@ async function resetPassword() {
 
   if (!email || !newPassword) {
     console.error('Usage: node reset-password.js <email> <nouveau_mot_de_passe>');
-    console.error('Exemple: node reset-password.js jeune1@test.com Password123');
     process.exit(1);
   }
 
-  const pool = mysql.createPool({
-    host: process.env.MYSQL_HOST || '127.0.0.1',
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE || 'microjob_local',
+  const isLocal = (process.env.DATABASE_URL || '').includes('127.0.0.1');
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
   });
 
   try {
     console.log(`🔄 Réinitialisation du mot de passe pour ${email}...`);
 
-    // Vérifier que l'utilisateur existe
-    const [users] = await pool.execute(
-      'SELECT user_id FROM auth_users WHERE LOWER(email) = ?',
+    const { rows } = await pool.query(
+      'SELECT user_id FROM microjob_auth WHERE LOWER(email) = $1',
       [email.toLowerCase()]
     );
 
-    if (users.length === 0) {
+    if (rows.length === 0) {
       console.error(`❌ Aucun utilisateur trouvé avec l'email: ${email}`);
       process.exit(1);
     }
 
-    // Hacher le nouveau mot de passe
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-    // Mettre à jour le mot de passe
-    await pool.execute(
-      'UPDATE auth_users SET password_hash = ? WHERE LOWER(email) = ?',
+    await pool.query(
+      'UPDATE microjob_auth SET password_hash = $1 WHERE LOWER(email) = $2',
       [hashedPassword, email.toLowerCase()]
     );
 
-    console.log(`✅ Mot de passe réinitialisé avec succès pour ${email}`);
+    console.log(`✅ Mot de passe réinitialisé pour ${email}`);
     console.log(`   Nouveau mot de passe: ${newPassword}`);
-
     await pool.end();
   } catch (error) {
     console.error('❌ Erreur:', error.message);

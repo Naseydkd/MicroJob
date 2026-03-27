@@ -42,6 +42,7 @@ export function DashboardEntreprise() {
     id: authUser?.id ?? "",
     email: authUser?.email ?? "",
     nom: authUser?.nom ?? "",
+    identityVerified: false,
   });
   const [mesMissions, setMesMissions] = useState<Mission[]>([]);
   const [candidatures, setCandidatures] = useState<Candidature[]>([]);
@@ -68,6 +69,7 @@ export function DashboardEntreprise() {
           id: data.userId,
           email: data.email,
           nom: data.nom ?? "",
+          identityVerified: Boolean(data.identityVerified),
         });
         const token = localStorage.getItem('access_token');
         if (token) {
@@ -188,7 +190,14 @@ export function DashboardEntreprise() {
               <div>
                 <p className="text-white/80 text-xs font-light italic">Microjob</p>
                 <p className="text-white text-sm font-medium">{tr("Bienvenue", "Barka", "Barka da zuwa")}</p>
-                <p className="text-white text-base font-bold uppercase tracking-wide">{entrepriseNomAffiche}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-white text-base font-bold uppercase tracking-wide">{entrepriseNomAffiche}</p>
+                  {currentUser.identityVerified ? (
+                    <Badge className="bg-green-500 hover:bg-green-500 text-white border-0">✓ Vérifié</Badge>
+                  ) : (
+                    <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">⏳ Non vérifié</Badge>
+                  )}
+                </div>
               </div>
             </div>
 

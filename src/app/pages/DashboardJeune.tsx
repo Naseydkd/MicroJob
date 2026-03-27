@@ -67,6 +67,7 @@ export function DashboardJeune() {
     email: authUser?.email ?? "",
     nom: authUser?.nom ?? "",
     prenom: authUser?.prenom ?? "",
+    identityVerified: false,
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -94,22 +95,13 @@ export function DashboardJeune() {
           email: data.email,
           nom: data.nom ?? "",
           prenom: data.prenom ?? "",
+          identityVerified: Boolean(data.identityVerified),
         };
         setCurrentUser(nextUser);
-        const token = localStorage.getItem('access_token');
-        if (token) {
-          saveAuthUser({
-            id: data.userId,
-            email: data.email,
-            userType: data.userType,
-            nom: data.nom ?? null,
-            prenom: data.prenom ?? null,
-            telephone: data.telephone ?? null,
-            ville: data.ville ?? null,
-          }, token);
-        }
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        console.error('Erreur chargement user:', err);
+      });
   }, [currentUser.id]);
 
   useEffect(() => {
@@ -193,7 +185,14 @@ export function DashboardJeune() {
               <div>
                 <p className="text-white/80 text-xs font-light italic">Microjob</p>
                 <p className="text-white text-sm font-medium">{tr("Bienvenue", "Barka", "Barka da zuwa")}</p>
-                <p className="text-white text-base font-bold uppercase tracking-wide">{currentUser.prenom}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-white text-base font-bold uppercase tracking-wide">{currentUser.prenom}</p>
+                  {currentUser.identityVerified ? (
+                    <Badge className="bg-green-500 hover:bg-green-500 text-white border-0">✓ Vérifié</Badge>
+                  ) : (
+                    <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-0">⏳ Non vérifié</Badge>
+                  )}
+                </div>
               </div>
             </div>
 

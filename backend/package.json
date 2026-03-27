@@ -6,9 +6,13 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "migrate:passwords": "node scripts/migrate-passwords.js",
-    "reset-password": "node scripts/reset-password.js"
+    "reset-password": "node scripts/reset-password.js",
+    "db:pull": "node scripts/sync-db.js pull",
+    "db:push": "node scripts/sync-db.js push --confirm",
+    "create-admin": "node scripts/create-admin.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
     "@types/pg": "^8.20.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

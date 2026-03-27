@@ -13,8 +13,8 @@ function sanitizeInput(input) {
 }
 
 function validatePhone(phone) {
-  if (!phone || !validator.isMobilePhone(phone, 'any', { strictMode: false })) {
-    return { valid: false, error: 'Numéro de téléphone invalide' };
+  if (!phone || phone.trim().length < 6) {
+    return { valid: false, error: 'Numéro de téléphone requis' };
   }
   return { valid: true };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
-import { getAdminUser, clearAdminAuth, getAdminToken } from "../lib/adminAuth";
+import { getAdminUser, clearAdminAuth, getAdminToken, refreshAdminToken } from "../lib/adminAuth";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -46,7 +46,7 @@ export function AdminDashboard() {
   const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    refreshAdminToken().finally(() => loadData());
   }, []);
 
   const loadData = async () => {

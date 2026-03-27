@@ -27,6 +27,7 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'http://localhost:8100',
+    'http://192.168.13.15:8100',
   ],
   credentials: true,
 }));
@@ -36,10 +37,11 @@ app.use(apiLimiter);
 // Servir les fichiers uploadés (protégé)
 app.use('/uploads', authenticateToken, express.static(path.join(__dirname, '../../uploads')));
 
-// PostgreSQL pool (Supabase)
+// PostgreSQL pool (Supabase local ou cloud)
+const isLocal = (process.env.DATABASE_URL || '').includes('127.0.0.1') || (process.env.DATABASE_URL || '').includes('localhost');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
 });
 
 // Wrapper pour compatibilité avec l'ancienne API mysql2
@@ -220,21 +222,18 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
   const passwordValidation = validatePasswordStrength(password);
   if (!passwordValidation.valid) {
     // Supprimer le fichier uploadé en cas d'erreur
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: passwordValidation.error });
   }
 
   // Validate email
   const emailValidation = validateEmail(email);
   if (!emailValidation.valid) {
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: emailValidation.error });
   }
 
   // Validate phone
   const phoneValidation = validatePhone(telephone);
   if (!phoneValidation.valid) {
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: phoneValidation.error });
   }
 
@@ -246,15 +245,12 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
   const normalizedVille = sanitizeInput(ville || '');
 
   if (userType === 'jeune' && (!normalizedNom || !normalizedPrenom)) {
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'Nom et prenom sont obligatoires pour un compte jeune' });
   }
   if (userType === 'entreprise' && !normalizedNomEntreprise) {
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'Le nom de l entreprise est obligatoire' });
   }
   if (!normalizedTelephone || !normalizedVille) {
-    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'Telephone et ville sont obligatoires' });
   }
 
@@ -264,8 +260,18 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
       : normalizedNom || defaultNameFromEmail(normalizedEmail);
   const prenomToSave = userType === 'jeune' ? normalizedPrenom : null;
 
-  // Chemin relatif du fichier uploadé
-  const identityDocumentPath = `uploads/identity-documents/${req.file.filename}`;
+  // Upload vers Supabase Storage
+  const { uploadToStorage } = require('./supabaseStorage');
+  let identityDocumentPath;
+  try {
+    identityDocumentPath = await uploadToStorage(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+  } catch (uploadError) {
+    return res.status(500).json({ error: 'Erreur lors de l\'upload du document: ' + uploadError.message });
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -277,7 +283,6 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
     );
     if (existing.length > 0) {
       await conn.rollback();
-      fs.unlinkSync(req.file.path);
       return res.status(409).json({ error: 'Un compte existe deja avec cet email' });
     }
 
@@ -287,7 +292,7 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
     const userId = newId(userType);
     await conn.execute(
       `INSERT INTO microjob_users (id, email, user_type, nom, prenom, telephone, ville, identity_document_path, identity_verified, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, NOW())`,
       [userId, normalizedEmail, userType, nomToSave, prenomToSave, normalizedTelephone, normalizedVille, identityDocumentPath]
     );
     await conn.execute(
@@ -329,11 +334,33 @@ app.post('/auth/signup', signupLimiter, uploadIdentityDocument, async (req, res)
   } catch (error) {
     try {
       await conn.rollback();
-      fs.unlinkSync(req.file.path);
     } catch {}
     return res.status(500).json({ error: error.message });
   } finally {
     conn.release();
+  }
+});
+
+// Refresh token - renouvelle le token avec les données à jour
+app.post('/auth/refresh', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, email, user_type, nom, prenom, telephone, ville, admin_role FROM microjob_users WHERE id = ? LIMIT 1`,
+      [req.user.userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    const user = rows[0];
+    const token = generateToken(user.id, user.user_type, user.admin_role);
+    return res.json({
+      userId: user.id,
+      email: user.email,
+      userType: user.user_type,
+      adminRole: user.admin_role || null,
+      nom: user.nom,
+      accessToken: token,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -395,7 +422,7 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
 app.get('/users/:id', authenticateToken, requireOwnership('id'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, email, user_type, nom, prenom, telephone, ville
+      `SELECT id, email, user_type, nom, prenom, telephone, ville, identity_verified
        FROM microjob_users
        WHERE id = ?
        LIMIT 1`,
@@ -413,6 +440,7 @@ app.get('/users/:id', authenticateToken, requireOwnership('id'), async (req, res
       prenom: user.prenom,
       telephone: user.telephone,
       ville: user.ville,
+      identityVerified: Boolean(user.identity_verified),
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -1107,11 +1135,35 @@ app.get('/admin/stats', authenticateToken, requireUserType('admin'), async (req,
     const [[{ total_entreprises }]] = await pool.execute("SELECT COUNT(*) as total_entreprises FROM microjob_users WHERE user_type='entreprise'");
     const [[{ total_missions }]] = await pool.execute('SELECT COUNT(*) as total_missions FROM missions');
     const [[{ missions_ouvertes }]] = await pool.execute("SELECT COUNT(*) as missions_ouvertes FROM missions WHERE statut='ouverte'");
-    const [[{ pending_verifs }]] = await pool.execute("SELECT COUNT(*) as pending_verifs FROM microjob_users WHERE identity_verified=0 AND identity_document_path IS NOT NULL");
+    const [[{ pending_verifs }]] = await pool.execute("SELECT COUNT(*) as pending_verifs FROM microjob_users WHERE identity_verified=FALSE AND identity_document_path IS NOT NULL");
     res.json({ total_users, total_jeunes, total_entreprises, total_missions, missions_ouvertes, pending_verifs });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Historique des vérifications (approuvées et rejetées)
+app.get('/admin/verifications-history', authenticateToken, requireUserType('admin'), async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, email, user_type, nom, prenom, telephone, ville, 
+              identity_verified, identity_verified_at, identity_verified_by,
+              identity_document_path, created_at
+       FROM microjob_users
+       WHERE identity_verified = TRUE OR (identity_verified = FALSE AND identity_document_path IS NULL AND created_at < NOW() - INTERVAL '1 day')
+       ORDER BY identity_verified_at DESC NULLS LAST
+       LIMIT 100`
+    );
+    const { getSignedUrl } = require('./supabaseStorage');
+    const result = await Promise.all(rows.map(async (row) => {
+      let document_url = null;
+      if (row.identity_document_path) {
+        try { document_url = await getSignedUrl(row.identity_document_path, 3600); } catch {}
+      }
+      return { ...row, document_url, status: row.identity_verified ? 'approved' : 'rejected' };
+    }));
+    res.json(result);
+  } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 // Routes de vérification d'identité (admin uniquement)
@@ -1120,10 +1172,20 @@ app.get('/admin/pending-verifications', authenticateToken, requireUserType('admi
     const [rows] = await pool.execute(
       `SELECT id, email, user_type, nom, prenom, telephone, ville, identity_document_path, created_at
        FROM microjob_users
-       WHERE identity_verified = 0 AND identity_document_path IS NOT NULL
+       WHERE identity_verified = FALSE AND identity_document_path IS NOT NULL
        ORDER BY created_at ASC`
     );
-    res.json(rows);
+    // Générer des URLs signées pour chaque document
+    const { getSignedUrl } = require('./supabaseStorage');
+    const result = await Promise.all(rows.map(async (row) => {
+      try {
+        const signedUrl = await getSignedUrl(row.identity_document_path, 3600);
+        return { ...row, document_url: signedUrl };
+      } catch {
+        return { ...row, document_url: null };
+      }
+    }));
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1138,7 +1200,7 @@ app.post('/admin/verify-identity/:userId', authenticateToken, requireUserType('a
     if (approved) {
       await pool.execute(
         `UPDATE microjob_users
-         SET identity_verified = 1, identity_verified_at = NOW(), identity_verified_by = ?
+         SET identity_verified = TRUE, identity_verified_at = NOW(), identity_verified_by = ?
          WHERE id = ?`,
         [adminId, userId]
       );
@@ -1270,7 +1332,7 @@ app.patch('/admin/users/:userId/ban', authenticateToken, requireUserType('admin'
   const { userId } = req.params;
   const { banned, reason } = req.body;
   try {
-    await pool.execute(`UPDATE microjob_users SET banned = ?, ban_reason = ? WHERE id = ?`, [banned ? 1 : 0, reason || null, userId]);
+    await pool.execute(`UPDATE microjob_users SET banned = ?, ban_reason = ? WHERE id = ?`, [banned ? TRUE : FALSE, reason || null, userId]);
     await pool.execute(`INSERT INTO admin_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, NOW())`,
       [newId('log'), req.user.userId, banned ? 'ban_user' : 'unban_user', userId, reason || '']);
     res.json({ message: banned ? 'Utilisateur banni' : 'Utilisateur débanni' });
@@ -1307,7 +1369,7 @@ app.get('/admin/users/:userId', authenticateToken, requireUserType('admin'), asy
   try {
     const [[user]] = await pool.execute(`SELECT id, email, user_type, nom, prenom, telephone, ville, identity_verified, banned, ban_reason, created_at FROM microjob_users WHERE id = ?`, [userId]);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    const [candidatures] = await pool.execute(`SELECT c.*, m.titre as mission_titre FROM candidatures c LEFT JOIN missions m ON m.id = c.mission_id WHERE c.jeune_id = ? ORDER BY c.created_at DESC LIMIT 10`, [userId]);
+    const [candidatures] = await pool.execute(`SELECT c.*, m.titre as mission_titre FROM candidatures c LEFT JOIN missions m ON m.id = c.mission_id WHERE c.jeune_id = ? ORDER BY c.date_postulation DESC LIMIT 10`, [userId]);
     const [missions] = await pool.execute(`SELECT * FROM missions WHERE entreprise_id = ? ORDER BY created_at DESC LIMIT 10`, [userId]);
     res.json({ user, candidatures, missions });
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -1347,10 +1409,10 @@ app.get('/admin/stats/advanced', authenticateToken, requireUserType('admin'), as
     const [[{ missions_ouvertes }]] = await pool.execute(`SELECT COUNT(*) as missions_ouvertes FROM missions WHERE statut='ouverte'`);
     const [[{ missions_terminees }]] = await pool.execute(`SELECT COUNT(*) as missions_terminees FROM missions WHERE statut='terminée'`);
     const [[{ total_candidatures }]] = await pool.execute(`SELECT COUNT(*) as total_candidatures FROM candidatures`);
-    const [[{ pending_verifs }]] = await pool.execute(`SELECT COUNT(*) as pending_verifs FROM microjob_users WHERE identity_verified=0 AND identity_document_path IS NOT NULL`);
-    const [[{ banned_users }]] = await pool.execute(`SELECT COUNT(*) as banned_users FROM microjob_users WHERE banned=1`);
-    const [users_by_day] = await pool.execute(`SELECT DATE(created_at) as date, COUNT(*) as count FROM microjob_users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY DATE(created_at) ORDER BY date`);
-    const [missions_by_day] = await pool.execute(`SELECT DATE(created_at) as date, COUNT(*) as count FROM missions WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY DATE(created_at) ORDER BY date`);
+    const [[{ pending_verifs }]] = await pool.execute(`SELECT COUNT(*) as pending_verifs FROM microjob_users WHERE identity_verified=FALSE AND identity_document_path IS NOT NULL`);
+    const [[{ banned_users }]] = await pool.execute(`SELECT COUNT(*) as banned_users FROM microjob_users WHERE banned=TRUE`);
+    const [users_by_day] = await pool.execute(`SELECT DATE(created_at) as date, COUNT(*) as count FROM microjob_users WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY DATE(created_at) ORDER BY date`);
+    const [missions_by_day] = await pool.execute(`SELECT DATE(created_at) as date, COUNT(*) as count FROM missions WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY DATE(created_at) ORDER BY date`);
     res.json({ total_users, total_jeunes, total_entreprises, total_missions, missions_ouvertes, missions_terminees, total_candidatures, pending_verifs, banned_users, users_by_day, missions_by_day });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });

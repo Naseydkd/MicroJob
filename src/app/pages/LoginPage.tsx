@@ -5,10 +5,11 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Briefcase, Users, Building2, Mail, Lock, Eye, EyeOff, User, Phone, MapPin } from "lucide-react";
+import { Briefcase, Users, Building2, Mail, Lock, Eye, EyeOff, User, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
 import { IdentityDocumentUpload } from "../components/IdentityDocumentUpload";
+import { PhoneInput } from "../components/PhoneInput";
 
 type AuthUserType = "jeune" | "entreprise";
 const AUTH_USER_KEY = "microjob_auth_user";
@@ -250,14 +251,10 @@ export function LoginPage() {
                 <>
                   <div>
                     <Label htmlFor="telephone">{tr("Téléphone", "Talon", "Waya")}</Label>
-                    <div className="relative mt-1">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                      <Input
-                        id="telephone"
-                        placeholder="+227 xx xx xx xx"
-                        className="pl-10"
+                    <div className="mt-1">
+                      <PhoneInput
                         value={telephone}
-                        onChange={(e) => setTelephone(e.target.value)}
+                        onChange={setTelephone}
                       />
                     </div>
                   </div>
